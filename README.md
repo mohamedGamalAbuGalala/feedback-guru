@@ -39,39 +39,46 @@
 
 ## 📚 Documentation
 
+- **[🚀 GETTING_STARTED.md](./GETTING_STARTED.md)** - **START HERE!** Complete setup guide with troubleshooting
 - **[📋 BRAINSTORM.md](./BRAINSTORM.md)** - Complete product vision, feature analysis, and competitor research
 - **[🗺️ IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md)** - Week-by-week development guide with code examples
 - **[📊 COMPETITIVE_ANALYSIS.md](./COMPETITIVE_ANALYSIS.md)** - Detailed comparison with Marker.io, Canny, Usersnap, etc.
+- **[✅ SETUP_COMPLETE.md](./SETUP_COMPLETE.md)** - Verification guide for completed setup
 
 ## 🎯 Quick Start
 
-### Prerequisites
-- Node.js 18+
-- PostgreSQL 14+
-- npm/pnpm/yarn
+**👉 Full setup guide:** See **[GETTING_STARTED.md](./GETTING_STARTED.md)** for detailed instructions.
 
-### Installation
+### Fast Setup (5 minutes)
 
 ```bash
-# Clone the repository
+# 1. Clone and install
 git clone https://github.com/yourusername/feedback-guru.git
 cd feedback-guru
-
-# Install dependencies
 npm install
 
-# Setup environment variables
-cp .env.example .env
-# Edit .env with your database credentials and API keys
+# 2. Start PostgreSQL
+docker compose up -d postgres
 
-# Run database migrations
-npx prisma migrate dev
+# 3. Setup database
+cd packages/database
+npm install
+npx prisma generate
+npx prisma migrate dev --name init
+cd ../..
 
-# Start development server
-npm run dev
+# 4. Start dashboard
+npm run dev:web
+
+# 5. In another terminal, start widget
+cd apps/widget
+npm install && npm run build && npm run serve
 ```
 
-Visit `http://localhost:3000` to see the dashboard.
+**Then:**
+- 📊 Dashboard: **http://localhost:3000**
+- 🎯 Widget Test: **http://localhost:3001/test.html**
+- 📝 Create account → Create project → Copy widget code → Test it!
 
 ## 🎨 Widget Usage
 
@@ -102,12 +109,15 @@ fg('init', {
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: MVP (Weeks 1-4)
+### ✅ Phase 1: MVP (Weeks 1-4) - **COMPLETE!**
 - [x] Widget with screenshot capture
-- [x] Basic annotations (arrow, highlight, text)
-- [x] Feedback submission API
-- [x] Dashboard with kanban board
-- [x] Table view with filtering
+- [x] Screenshot annotations (arrow, highlight, text, pen, blur)
+- [x] Feedback submission API with validation
+- [x] Dashboard with kanban board (drag & drop)
+- [x] Table view with filtering & search
+- [x] Projects management
+- [x] Multi-workspace support
+- [x] Authentication system
 
 ### 🚧 Phase 2: Enhanced (Weeks 5-8)
 - [ ] Advanced annotations (pen, blur)
