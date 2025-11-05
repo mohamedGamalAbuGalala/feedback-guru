@@ -119,12 +119,15 @@ fg('init', {
 - [x] Multi-workspace support
 - [x] Authentication system
 
-### 🚧 Phase 2: Enhanced (Weeks 5-8)
-- [ ] Advanced annotations (pen, blur)
-- [ ] Screen recording
-- [ ] Console log capture
-- [ ] Team collaboration features
-- [ ] Email notifications
+### ✅ Phase 2: Enhanced (Weeks 5-8) - **COMPLETE!**
+- [x] Console log capture (automatic)
+- [x] Network request logging (errors & slow requests)
+- [x] Comments system for feedback
+- [x] Feedback management API (CRUD)
+- [x] Status updates & assignment
+- [x] Beautiful log viewers in dashboard
+- [ ] Screen recording (future)
+- [ ] Email notifications (future)
 
 ### 🔮 Phase 3: Advanced (Weeks 9-12)
 - [ ] Public feedback board

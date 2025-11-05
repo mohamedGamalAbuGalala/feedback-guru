@@ -2,6 +2,8 @@ import { FeedbackModal } from './ui/modal';
 import { TriggerButton } from './ui/button';
 import { captureMetadata } from './capture/metadata';
 import { submitFeedback } from './api/client';
+import { initConsoleCapture, getConsoleLogs } from './capture/console';
+import { initNetworkCapture, getNetworkLogs } from './capture/network';
 
 export interface FeedbackGuruConfig {
   apiKey: string;
@@ -9,6 +11,8 @@ export interface FeedbackGuruConfig {
   primaryColor?: string;
   buttonText?: string;
   language?: string;
+  captureConsole?: boolean; // Default: true
+  captureNetwork?: boolean; // Default: true
 }
 
 class FeedbackGuru {
@@ -24,6 +28,8 @@ class FeedbackGuru {
       primaryColor: '#6366f1',
       buttonText: 'Feedback',
       language: 'en',
+      captureConsole: true,
+      captureNetwork: true,
     };
   }
 
@@ -40,6 +46,14 @@ class FeedbackGuru {
 
     this.config = { ...this.config, ...config };
     this.isInitialized = true;
+
+    // Initialize console and network capture
+    if (this.config.captureConsole !== false) {
+      initConsoleCapture();
+    }
+    if (this.config.captureNetwork !== false) {
+      initNetworkCapture();
+    }
 
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
@@ -90,11 +104,19 @@ class FeedbackGuru {
       // Capture metadata
       const metadata = captureMetadata();
 
+      // Capture console logs
+      const consoleLogs = this.config.captureConsole !== false ? getConsoleLogs() : [];
+
+      // Capture network logs
+      const networkLogs = this.config.captureNetwork !== false ? getNetworkLogs() : [];
+
       // Prepare feedback data
       const feedbackData = {
         apiKey: this.config.apiKey,
         ...formData,
         ...metadata,
+        consoleLogs: consoleLogs.length > 0 ? consoleLogs : undefined,
+        networkLogs: networkLogs.length > 0 ? networkLogs : undefined,
       };
 
       // Submit to API

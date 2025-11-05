@@ -20,6 +20,8 @@ interface Feedback {
   browser: string | null;
   os: string | null;
   createdAt: string;
+  consoleLogs: any;
+  networkLogs: any;
   screenshots: {
     id: string;
     url: string;
@@ -309,6 +311,56 @@ export default function FeedbackPage() {
                   <dd className="text-gray-900">{new Date(selectedFeedback.createdAt).toLocaleString()}</dd>
                 </dl>
               </div>
+
+              {/* Console Logs */}
+              {selectedFeedback.consoleLogs && Array.isArray(selectedFeedback.consoleLogs) && selectedFeedback.consoleLogs.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Console Logs ({selectedFeedback.consoleLogs.length})</h3>
+                  <div className="bg-gray-900 text-gray-100 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs">
+                    {selectedFeedback.consoleLogs.map((log: any, idx: number) => (
+                      <div key={idx} className={`py-1 ${
+                        log.level === 'error' ? 'text-red-400' :
+                        log.level === 'warn' ? 'text-yellow-400' :
+                        log.level === 'info' ? 'text-blue-400' :
+                        'text-gray-300'
+                      }`}>
+                        <span className="text-gray-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                        <span className="font-semibold uppercase">{log.level}:</span> {log.message}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Network Logs */}
+              {selectedFeedback.networkLogs && Array.isArray(selectedFeedback.networkLogs) && selectedFeedback.networkLogs.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Network Requests ({selectedFeedback.networkLogs.length})</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    {selectedFeedback.networkLogs.map((log: any, idx: number) => (
+                      <div key={idx} className="py-2 border-b last:border-b-0">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className={`font-semibold ${
+                            log.status && log.status >= 400 ? 'text-red-600' :
+                            log.error ? 'text-red-600' :
+                            log.status && log.status >= 300 ? 'text-yellow-600' :
+                            'text-green-600'
+                          }`}>
+                            {log.method} {log.status || 'ERROR'}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            {log.duration ? `${log.duration}ms` : ''}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600 truncate mt-1">{log.url}</div>
+                        {log.error && (
+                          <div className="text-xs text-red-600 mt-1">Error: {log.error}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 border-t flex gap-2">
                 <Button className="flex-1">Mark as Resolved</Button>
