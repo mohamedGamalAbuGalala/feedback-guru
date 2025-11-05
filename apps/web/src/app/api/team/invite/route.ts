@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { emailService } from "@/lib/email";
 
 const inviteSchema = z.object({
   workspaceId: z.string(),
@@ -21,12 +22,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { workspaceId, email, role } = inviteSchema.parse(body);
 
-    // Get current user
+    // Get current user and workspace
     const currentUser = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: {
         workspaceMembers: {
           where: { workspaceId },
+          include: {
+            workspace: true,
+          },
         },
       },
     });
@@ -103,11 +107,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // TODO: Send invitation email
-    // This would be implemented with an email service like Resend, SendGrid, or AWS SES
-    // For now, we'll just log it
-    console.log(`Invitation sent to ${email} for workspace ${workspaceId}`);
-    console.log(`Invitation link: ${process.env.NEXTAUTH_URL}/invite/${invitation.token}`);
+    // Send invitation email
+    const workspace = currentUser.workspaceMembers[0].workspace;
+    const invitationUrl = `${process.env.NEXTAUTH_URL}/invite/${invitation.token}`;
+
+    await emailService.sendInvitation(email, {
+      inviterName: currentUser.name || currentUser.email,
+      workspaceName: workspace.name,
+      role,
+      invitationUrl,
+    });
 
     return NextResponse.json({
       success: true,
