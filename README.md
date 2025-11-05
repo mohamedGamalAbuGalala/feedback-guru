@@ -49,7 +49,33 @@
 
 **👉 Full setup guide:** See **[GETTING_STARTED.md](./GETTING_STARTED.md)** for detailed instructions.
 
-### Fast Setup (5 minutes)
+### Option 1: Docker (Recommended - 2 minutes) 🐳
+
+Everything runs in Docker with hot reloading:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/yourusername/feedback-guru.git
+cd feedback-guru
+
+# 2. Copy environment variables
+cp .env.example .env.local
+
+# 3. Start everything with Docker
+docker compose up
+
+# That's it! Docker handles:
+# - PostgreSQL database
+# - Next.js web app (with hot reload)
+# - Widget build (with watch mode)
+# - All dependencies
+```
+
+**Then visit:**
+- 📊 Dashboard: **http://localhost:3000**
+- 🗄️ pgAdmin: **http://localhost:5050** (admin@feedbackguru.local / admin)
+
+### Option 2: Local Development (5 minutes)
 
 ```bash
 # 1. Clone and install
@@ -67,17 +93,19 @@ npx prisma generate
 npx prisma migrate dev --name init
 cd ../..
 
-# 4. Start dashboard
-npm run dev:web
+# 4. Copy environment variables
+cp .env.example .env.local
 
-# 5. In another terminal, start widget
+# 5. Start dashboard
+npm run dev
+
+# 6. In another terminal, start widget
 cd apps/widget
-npm install && npm run build && npm run serve
+npm run watch
 ```
 
 **Then:**
 - 📊 Dashboard: **http://localhost:3000**
-- 🎯 Widget Test: **http://localhost:3001/test.html**
 - 📝 Create account → Create project → Copy widget code → Test it!
 
 ## 🎨 Widget Usage
@@ -107,34 +135,182 @@ fg('init', {
 });
 ```
 
+## 🏗️ Infrastructure & Services
+
+### Required Services
+
+#### 1. PostgreSQL Database
+- **Purpose:** Main application database
+- **Docker:** Included in `docker-compose.yml`
+- **Local:** Install PostgreSQL 15+ or use Docker
+- **Production:** Any PostgreSQL hosting (AWS RDS, Supabase, Neon, Railway)
+
+```bash
+# Quick start with Docker
+docker compose up -d postgres
+```
+
+### Optional Services (Recommended for Production)
+
+#### 2. Email Service - Resend (for notifications)
+- **Purpose:** Team invitations, feedback notifications, comments, status changes
+- **Cost:** Free tier: 3,000 emails/month, then $20/month
+- **Setup:**
+  1. Sign up at [resend.com](https://resend.com)
+  2. Get API key
+  3. Add to `.env.local`:
+     ```
+     RESEND_API_KEY=re_xxxxxxxxxxxxx
+     EMAIL_FROM=notifications@your-domain.com
+     ```
+- **Alternative:** SendGrid, AWS SES, Mailgun, Postmark
+
+#### 3. File Storage - AWS S3 or Cloudflare R2 (for screenshots)
+- **Purpose:** Store feedback screenshots
+- **Cost:**
+  - AWS S3: ~$0.023/GB/month + $0.0004/1k requests
+  - Cloudflare R2: Free up to 10GB, then $0.015/GB
+- **Setup (AWS S3):**
+  1. Create S3 bucket
+  2. Create IAM user with S3 access
+  3. Add to `.env.local`:
+     ```
+     AWS_ACCESS_KEY_ID=xxx
+     AWS_SECRET_ACCESS_KEY=xxx
+     AWS_REGION=us-east-1
+     S3_BUCKET_NAME=feedback-guru-screenshots
+     ```
+- **Setup (Cloudflare R2):**
+  1. Create R2 bucket
+  2. Generate R2 API token
+  3. Add to `.env.local`:
+     ```
+     R2_ACCOUNT_ID=xxx
+     R2_ACCESS_KEY_ID=xxx
+     R2_SECRET_ACCESS_KEY=xxx
+     R2_BUCKET_NAME=feedback-guru-screenshots
+     ```
+
+### Integrations (Configured via Dashboard)
+
+These are configured through the UI at `/dashboard/integrations`:
+
+#### 4. Slack Integration
+- **Purpose:** Get feedback notifications in Slack channels
+- **Cost:** Free
+- **Setup:**
+  1. Create Slack incoming webhook
+  2. Add webhook URL in dashboard integrations page
+  3. Test connection
+- **Docs:** [Slack Incoming Webhooks](https://api.slack.com/messaging/webhooks)
+
+#### 5. Discord Integration
+- **Purpose:** Post feedback to Discord channels
+- **Cost:** Free
+- **Setup:**
+  1. Create Discord webhook (Server Settings → Integrations → Webhooks)
+  2. Add webhook URL in dashboard integrations page
+  3. Test connection
+- **Docs:** [Discord Webhooks](https://support.discord.com/hc/en-us/articles/228383668)
+
+#### 6. Custom Webhooks
+- **Purpose:** Send feedback events to your own services
+- **Cost:** Free
+- **Setup:** Add your webhook URL in dashboard integrations page
+- **Events:** feedback.created, feedback.updated, feedback.commented, feedback.status_changed
+- **Security:** HMAC signature verification included
+
+### Optional Services
+
+#### 7. Vercel / Netlify (for deployment)
+- **Purpose:** Host Next.js dashboard
+- **Cost:** Free tier available, Pro from $20/month
+- **Recommended:** Vercel (built by Next.js creators)
+
+#### 8. CDN - Cloudflare or AWS CloudFront (for widget)
+- **Purpose:** Distribute widget globally with low latency
+- **Cost:**
+  - Cloudflare: Free
+  - AWS CloudFront: Pay as you go (~$0.085/GB)
+
+#### 9. Error Tracking - Sentry
+- **Purpose:** Monitor errors in production
+- **Cost:** Free tier: 5k events/month
+- **Setup:** Add `SENTRY_DSN` to `.env.local`
+
+#### 10. Analytics - Google Analytics or Vercel Analytics
+- **Purpose:** Track usage and user behavior
+- **Cost:** Free (GA) or included with Vercel Pro
+- **Setup:** Add tracking ID to `.env.local`
+
+### Cost Estimate
+
+**Minimal Setup (Development):**
+- PostgreSQL: Free (Docker or local)
+- **Total: $0/month**
+
+**Production (Small Scale - up to 10k users):**
+- PostgreSQL: $7/month (Railway/Supabase)
+- Vercel Hobby: $0 (or Pro $20/month)
+- Resend: $0 (free tier)
+- Cloudflare R2: $0 (under 10GB)
+- **Total: $7-27/month**
+
+**Production (Medium Scale - up to 100k users):**
+- PostgreSQL: $25/month (AWS RDS/Supabase)
+- Vercel Pro: $20/month
+- Resend: $20/month
+- AWS S3: $5/month
+- Cloudflare CDN: $0
+- **Total: $70/month**
+
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: MVP (Weeks 1-4) - **COMPLETE!**
-- [x] Widget with screenshot capture
-- [x] Screenshot annotations (arrow, highlight, text, pen, blur)
+### ✅ Phase 1: MVP - **COMPLETE!**
+- [x] Widget with screenshot capture and annotations
 - [x] Feedback submission API with validation
 - [x] Dashboard with kanban board (drag & drop)
 - [x] Table view with filtering & search
 - [x] Projects management
 - [x] Multi-workspace support
-- [x] Authentication system
+- [x] Authentication system (NextAuth)
 
-### ✅ Phase 2: Enhanced (Weeks 5-8) - **COMPLETE!**
+### ✅ Phase 2: Advanced Debugging - **COMPLETE!**
 - [x] Console log capture (automatic)
 - [x] Network request logging (errors & slow requests)
 - [x] Comments system for feedback
 - [x] Feedback management API (CRUD)
 - [x] Status updates & assignment
 - [x] Beautiful log viewers in dashboard
-- [ ] Screen recording (future)
-- [ ] Email notifications (future)
 
-### 🔮 Phase 3: Advanced (Weeks 9-12)
-- [ ] Public feedback board
-- [ ] Voting system
-- [ ] Roadmap page
-- [ ] Changelog
-- [ ] Integrations (Slack, Discord, Jira, Linear)
+### ✅ Phase 3: Marketing & Public Features - **COMPLETE!**
+- [x] Landing page with beta pricing
+- [x] Public feedback board
+- [x] Voting system with IP tracking
+- [x] Settings page for public board management
+
+### ✅ Phase 4: Team Collaboration & Integrations - **COMPLETE!**
+- [x] Team member invitation system
+- [x] Role-based permissions (OWNER, ADMIN, MEMBER, VIEWER)
+- [x] Slack integration
+- [x] Discord integration
+- [x] Custom webhook system with HMAC signatures
+
+### ✅ Phase 5: Email & Roadmap - **COMPLETE!**
+- [x] Email notification system (Resend)
+- [x] Invitation emails
+- [x] Feedback notification emails
+- [x] Comment notification emails
+- [x] Status change notification emails
+- [x] Product roadmap management
+- [x] Public roadmap page
+
+### 🚀 Phase 6: Analytics & Polish (In Progress)
+- [ ] Analytics dashboard (metrics, trends, charts)
+- [ ] Changelog system
+- [ ] Public changelog page
+- [ ] Screen recording (future)
+- [ ] Mobile app (future)
 
 ## 🤝 Contributing
 
