@@ -1,0 +1,366 @@
+// Feedback Guru Database Schema
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// User & Authentication Models
+// ============================================================================
+
+model User {
+  id            String            @id @default(cuid())
+  email         String            @unique
+  name          String?
+  password      String
+  emailVerified DateTime?
+  image         String?
+  workspaces    WorkspaceMember[]
+  accounts      Account[]
+  sessions      Session[]
+  comments      Comment[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// Workspace & Team Models
+// ============================================================================
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  image     String?
+  members   WorkspaceMember[]
+  projects  Project[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([slug])
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  role        Role      @default(MEMBER)
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// ============================================================================
+// Project & Configuration Models
+// ============================================================================
+
+model Project {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String
+  description String?    @db.Text
+  apiKey      String     @unique @default(uuid())
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  settings    Json?      // Widget customization settings
+  feedback    Feedback[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([apiKey])
+}
+
+// ============================================================================
+// Feedback & Submission Models
+// ============================================================================
+
+model Feedback {
+  id          String       @id @default(cuid())
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  // Submitter info (optional for anonymous feedback)
+  email       String?
+  name        String?
+  // Feedback content
+  category    Category     @default(BUG)
+  priority    Priority     @default(MEDIUM)
+  title       String
+  description String       @db.Text
+  status      Status       @default(NEW)
+  // Page/Browser metadata
+  url         String       @db.Text
+  browser     String?
+  browserVersion String?
+  os          String?
+  osVersion   String?
+  screenWidth Int?
+  screenHeight Int?
+  userAgent   String?      @db.Text
+  // Technical metadata (JSON)
+  consoleLogs Json?
+  networkLogs Json?
+  customFields Json?
+  // Attachments
+  screenshots Screenshot[]
+  // Management
+  assignedTo  String?
+  assignedToName String?
+  comments    Comment[]
+  votes       Int          @default(0)
+  isPublic    Boolean      @default(false)
+  // Timestamps
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([projectId, status])
+  @@index([projectId, category])
+  @@index([projectId, createdAt])
+  @@index([email])
+  @@index([status])
+}
+
+enum Category {
+  BUG
+  FEATURE_REQUEST
+  QUESTION
+  IMPROVEMENT
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Status {
+  NEW
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  WONT_FIX
+  DUPLICATE
+}
+
+// ============================================================================
+// Screenshot & Media Models
+// ============================================================================
+
+model Screenshot {
+  id          String   @id @default(cuid())
+  feedback    Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  feedbackId  String
+  url         String   @db.Text // S3/R2 URL
+  thumbnailUrl String? @db.Text
+  annotations Json?    // Annotation data (arrows, highlights, etc.)
+  width       Int?
+  height      Int?
+  size        Int?     // File size in bytes
+  mimeType    String?
+  createdAt   DateTime @default(now())
+
+  @@index([feedbackId])
+}
+
+// ============================================================================
+// Comments & Collaboration Models
+// ============================================================================
+
+model Comment {
+  id         String   @id @default(cuid())
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  feedbackId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  content    String   @db.Text
+  isInternal Boolean  @default(false) // Internal notes vs public comments
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([feedbackId])
+  @@index([userId])
+}
+
+// ============================================================================
+// Integration & Webhook Models (Phase 3)
+// ============================================================================
+
+model Integration {
+  id          String           @id @default(cuid())
+  workspaceId String
+  type        IntegrationType
+  name        String
+  config      Json             // Integration-specific configuration
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([workspaceId])
+}
+
+enum IntegrationType {
+  SLACK
+  DISCORD
+  JIRA
+  LINEAR
+  GITHUB
+  WEBHOOK
+  ZAPIER
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String   @db.Text
+  events      String[] // Array of event types to listen to
+  secret      String?  // Secret for webhook signature verification
+  isActive    Boolean  @default(true)
+  lastTriggeredAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+// ============================================================================
+// Public Board & Voting (Phase 3)
+// ============================================================================
+
+model Vote {
+  id         String   @id @default(cuid())
+  feedbackId String
+  email      String?  // Can be anonymous
+  ipAddress  String?  // For preventing duplicate votes
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([feedbackId, email])
+  @@unique([feedbackId, ipAddress])
+  @@index([feedbackId])
+}
+
+// ============================================================================
+// Roadmap & Changelog (Phase 3)
+// ============================================================================
+
+model RoadmapItem {
+  id          String         @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?        @db.Text
+  status      RoadmapStatus  @default(PLANNED)
+  quarter     String?        // e.g., "Q1 2025"
+  votes       Int            @default(0)
+  linkedFeedbackIds String[] // Array of feedback IDs
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([workspaceId])
+}
+
+enum RoadmapStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ChangelogEntry {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  content     String   @db.Text
+  version     String?
+  type        ChangelogType @default(FEATURE)
+  publishedAt DateTime?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([publishedAt])
+}
+
+enum ChangelogType {
+  FEATURE
+  IMPROVEMENT
+  BUG_FIX
+  BREAKING_CHANGE
+}
+
+// ============================================================================
+// Analytics & Tracking (Future)
+// ============================================================================
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  projectId  String
+  eventType  String
+  eventData  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([eventType])
+}
