@@ -73,14 +73,15 @@ model VerificationToken {
 // ============================================================================
 
 model Workspace {
-  id        String            @id @default(cuid())
-  name      String
-  slug      String            @unique
-  image     String?
-  members   WorkspaceMember[]
-  projects  Project[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  image       String?
+  members     WorkspaceMember[]
+  invitations Invitation[]
+  projects    Project[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([slug])
 }
@@ -99,11 +100,37 @@ model WorkspaceMember {
   @@index([userId])
 }
 
+model Invitation {
+  id          String           @id @default(cuid())
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  email       String
+  role        Role             @default(MEMBER)
+  token       String           @unique @default(uuid())
+  status      InvitationStatus @default(PENDING)
+  invitedBy   String?          // User ID who sent the invitation
+  expiresAt   DateTime         // Expiration date (e.g., 7 days from creation)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+}
+
 enum Role {
   OWNER
   ADMIN
   MEMBER
   VIEWER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }
 
 // ============================================================================
