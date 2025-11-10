@@ -1,0 +1,37 @@
+# Development Dockerfile with hot reloading support
+ARG NODE_VERSION=20
+
+FROM node:${NODE_VERSION}-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    libc6-compat \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Copy workspace configuration
+COPY turbo.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy Prisma schema first for generation
+COPY packages/database/prisma ./packages/database/prisma
+
+# Generate Prisma Client
+RUN cd packages/database && npx prisma generate
+
+# Expose ports
+# 3000 for Next.js dev server
+EXPOSE 3000
+
+# Default command (can be overridden in docker-compose.yml)
+CMD ["npm", "run", "dev"]
