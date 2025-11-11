@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
 
 /**
  * GET /api/public/feedback
@@ -10,7 +11,8 @@ import { prisma } from "@/lib/prisma";
  * - category: string (optional filter)
  * - status: string (optional filter)
  * - sortBy: "votes" | "recent" (default: "votes")
- * - limit: number (default: 100)
+ * - page: number (default: 1)
+ * - limit: number (default: 20, max: 100)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +22,9 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category");
     const status = searchParams.get("status");
     const sortBy = searchParams.get("sortBy") || "votes";
-    const limit = parseInt(searchParams.get("limit") || "100");
+
+    // Get pagination params
+    const { page, limit, skip } = getPaginationFromSearchParams(searchParams);
 
     if (!slug) {
       return NextResponse.json(
@@ -86,7 +90,10 @@ export async function GET(request: NextRequest) {
       orderBy.push({ createdAt: "desc" });
     }
 
-    // Fetch feedback
+    // Get total count for pagination
+    const total = await prisma.feedback.count({ where });
+
+    // Fetch feedback with pagination
     const feedback = await prisma.feedback.findMany({
       where,
       include: {
@@ -97,8 +104,12 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy,
+      skip,
       take: limit,
     });
+
+    // Create paginated response
+    const paginatedResponse = createPaginatedResponse(feedback, total, page, limit);
 
     return NextResponse.json({
       project: {
@@ -107,8 +118,7 @@ export async function GET(request: NextRequest) {
         slug: project.slug,
         workspaceName: project.workspace.name,
       },
-      feedback,
-      count: feedback.length,
+      ...paginatedResponse,
     });
   } catch (error) {
     console.error("Error fetching public feedback:", error);

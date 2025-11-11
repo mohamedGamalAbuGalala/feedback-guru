@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notificationService } from "@/lib/notifications";
 import { storageService } from "@/lib/storage";
+import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
 
 const feedbackSchema = z.object({
   apiKey: z.string(),
@@ -272,10 +273,15 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/feedback - List feedback for authenticated user
+// Query params:
+// - apiKey: string (required) - Project API key
+// - page: number (optional, default: 1) - Page number
+// - limit: number (optional, default: 20, max: 100) - Items per page
+// - status: string (optional) - Filter by status
+// - category: string (optional) - Filter by category
+// - priority: string (optional) - Filter by priority
 export async function GET(request: NextRequest) {
   try {
-    // For now, return public endpoint error
-    // In production, implement authentication and filtering
     const { searchParams } = new URL(request.url);
     const apiKey = searchParams.get("apiKey");
 
@@ -297,10 +303,35 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get pagination params
+    const { page, limit, skip } = getPaginationFromSearchParams(searchParams);
+
+    // Build filters
+    const where: any = {
+      projectId: project.id,
+    };
+
+    const status = searchParams.get("status");
+    if (status) {
+      where.status = status;
+    }
+
+    const category = searchParams.get("category");
+    if (category) {
+      where.category = category;
+    }
+
+    const priority = searchParams.get("priority");
+    if (priority) {
+      where.priority = priority;
+    }
+
+    // Get total count for pagination
+    const total = await prisma.feedback.count({ where });
+
+    // Fetch feedback with pagination
     const feedback = await prisma.feedback.findMany({
-      where: {
-        projectId: project.id,
-      },
+      where,
       include: {
         screenshots: true,
         comments: {
@@ -317,10 +348,13 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: "desc",
       },
-      take: 50,
+      skip,
+      take: limit,
     });
 
-    return NextResponse.json({ feedback });
+    // Return paginated response
+    const response = createPaginatedResponse(feedback, total, page, limit);
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching feedback:", error);
     return NextResponse.json(
