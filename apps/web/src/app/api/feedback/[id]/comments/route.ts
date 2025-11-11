@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notificationService } from "@/lib/notifications";
 
 const commentSchema = z.object({
   content: z.string().min(1, "Comment cannot be empty"),
@@ -92,7 +93,7 @@ export async function POST(
     const body = await request.json();
     const validatedData = commentSchema.parse(body);
 
-    // Verify user has access to this feedback
+    // Verify user has access to this feedback and get workspace info
     const feedback = await prisma.feedback.findFirst({
       where: {
         id: params.id,
@@ -103,6 +104,13 @@ export async function POST(
                 userId: userId,
               },
             },
+          },
+        },
+      },
+      include: {
+        project: {
+          include: {
+            workspace: true,
           },
         },
       },
@@ -134,6 +142,116 @@ export async function POST(
         },
       },
     });
+
+    // Send notifications (fire and forget - don't block API response)
+    // Only send if comment is not internal
+    if (!comment.isInternal) {
+      setImmediate(async () => {
+        try {
+          // Email notifications to team members
+          await notificationService.notifyCommentCreated({
+            feedbackId: params.id,
+            commentId: comment.id,
+            commentContent: comment.content,
+            commenterId: userId,
+          });
+
+          // Slack notification
+          await notificationService.notifySlack(feedback.project.workspace.id, {
+            text: `💬 New comment on feedback: ${feedback.title}`,
+            blocks: [
+              {
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: "💬 New Comment",
+                },
+              },
+              {
+                type: "section",
+                fields: [
+                  {
+                    type: "mrkdwn",
+                    text: `*Feedback:*\n${feedback.title}`,
+                  },
+                  {
+                    type: "mrkdwn",
+                    text: `*By:*\n${comment.user.name || comment.user.email}`,
+                  },
+                ],
+              },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*Comment:*\n${comment.content.substring(0, 200)}${comment.content.length > 200 ? "..." : ""}`,
+                },
+              },
+              {
+                type: "actions",
+                elements: [
+                  {
+                    type: "button",
+                    text: {
+                      type: "plain_text",
+                      text: "View Feedback",
+                    },
+                    url: `${process.env.NEXTAUTH_URL}/dashboard/feedback/${params.id}`,
+                  },
+                ],
+              },
+            ],
+          });
+
+          // Discord notification
+          await notificationService.notifyDiscord(feedback.project.workspace.id, {
+            title: "💬 New Comment",
+            description: comment.content.substring(0, 200) + (comment.content.length > 200 ? "..." : ""),
+            color: 0x3b82f6, // Blue
+            fields: [
+              {
+                name: "Feedback",
+                value: feedback.title,
+                inline: true,
+              },
+              {
+                name: "By",
+                value: comment.user.name || comment.user.email,
+                inline: true,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+            footer: {
+              text: "Feedback Guru",
+            },
+            url: `${process.env.NEXTAUTH_URL}/dashboard/feedback/${params.id}`,
+          });
+
+          // Custom webhooks
+          await notificationService.triggerWebhooks(feedback.project.workspace.id, "comment.created", {
+            comment: {
+              id: comment.id,
+              content: comment.content,
+              isInternal: comment.isInternal,
+              createdAt: comment.createdAt,
+            },
+            feedback: {
+              id: feedback.id,
+              title: feedback.title,
+              category: feedback.category,
+              status: feedback.status,
+            },
+            user: {
+              id: comment.user.id,
+              name: comment.user.name,
+              email: comment.user.email,
+            },
+          });
+        } catch (error) {
+          console.error("Error sending comment notifications:", error);
+        }
+      });
+    }
 
     return NextResponse.json({ comment }, { status: 201 });
   } catch (error: any) {

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notificationService } from "@/lib/notifications";
 
 const updateFeedbackSchema = z.object({
   status: z.enum(["NEW", "OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED", "WONT_FIX", "DUPLICATE"]).optional(),
@@ -94,7 +95,7 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateFeedbackSchema.parse(body);
 
-    // Verify user has access to this feedback
+    // Verify user has access to this feedback and get workspace info
     const feedback = await prisma.feedback.findFirst({
       where: {
         id: params.id,
@@ -108,6 +109,13 @@ export async function PATCH(
           },
         },
       },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
     });
 
     if (!feedback) {
@@ -116,6 +124,10 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    // Store old status for notification
+    const oldStatus = feedback.status;
+    const statusChanged = validatedData.status && validatedData.status !== oldStatus;
 
     // Update feedback
     const updatedFeedback = await prisma.feedback.update({
@@ -144,6 +156,120 @@ export async function PATCH(
         },
       },
     });
+
+    // Send notifications if status changed (fire and forget)
+    if (statusChanged && validatedData.status) {
+      setImmediate(async () => {
+        try {
+          // Email notifications to team members
+          await notificationService.notifyStatusChanged({
+            feedbackId: params.id,
+            oldStatus: oldStatus,
+            newStatus: validatedData.status!,
+            changedById: userId,
+          });
+
+          // Slack notification
+          const statusEmoji = {
+            NEW: "🆕",
+            OPEN: "📂",
+            IN_PROGRESS: "⚙️",
+            RESOLVED: "✅",
+            CLOSED: "🔒",
+            WONT_FIX: "❌",
+            DUPLICATE: "🔄",
+          };
+
+          await notificationService.notifySlack(feedback.project.workspace.id, {
+            text: `Status changed: ${feedback.title}`,
+            blocks: [
+              {
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: "📊 Status Changed",
+                },
+              },
+              {
+                type: "section",
+                fields: [
+                  {
+                    type: "mrkdwn",
+                    text: `*Feedback:*\n${feedback.title}`,
+                  },
+                  {
+                    type: "mrkdwn",
+                    text: `*Status:*\n${statusEmoji[oldStatus]} ${oldStatus} → ${statusEmoji[validatedData.status]} ${validatedData.status}`,
+                  },
+                ],
+              },
+              {
+                type: "actions",
+                elements: [
+                  {
+                    type: "button",
+                    text: {
+                      type: "plain_text",
+                      text: "View Feedback",
+                    },
+                    url: `${process.env.NEXTAUTH_URL}/dashboard/feedback/${params.id}`,
+                  },
+                ],
+              },
+            ],
+          });
+
+          // Discord notification
+          const statusColor = {
+            NEW: 0x3b82f6,      // Blue
+            OPEN: 0x3b82f6,     // Blue
+            IN_PROGRESS: 0xf59e0b, // Amber
+            RESOLVED: 0x10b981,    // Green
+            CLOSED: 0x6b7280,      // Gray
+            WONT_FIX: 0xef4444,    // Red
+            DUPLICATE: 0x8b5cf6,   // Purple
+          };
+
+          await notificationService.notifyDiscord(feedback.project.workspace.id, {
+            title: "📊 Status Changed",
+            description: `**${feedback.title}**`,
+            color: statusColor[validatedData.status],
+            fields: [
+              {
+                name: "Old Status",
+                value: `${statusEmoji[oldStatus]} ${oldStatus}`,
+                inline: true,
+              },
+              {
+                name: "New Status",
+                value: `${statusEmoji[validatedData.status]} ${validatedData.status}`,
+                inline: true,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+            footer: {
+              text: "Feedback Guru",
+            },
+            url: `${process.env.NEXTAUTH_URL}/dashboard/feedback/${params.id}`,
+          });
+
+          // Custom webhooks
+          await notificationService.triggerWebhooks(feedback.project.workspace.id, "feedback.status_changed", {
+            feedback: {
+              id: feedback.id,
+              title: feedback.title,
+              category: feedback.category,
+              priority: feedback.priority,
+              oldStatus: oldStatus,
+              newStatus: validatedData.status,
+            },
+            changedBy: userId,
+          });
+        } catch (error) {
+          console.error("Error sending status change notifications:", error);
+        }
+      });
+    }
 
     return NextResponse.json({ feedback: updatedFeedback });
   } catch (error: any) {
