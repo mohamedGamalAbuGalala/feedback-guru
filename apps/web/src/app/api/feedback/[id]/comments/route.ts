@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notificationService } from "@/lib/notifications";
+import { sanitizeComment } from "@/lib/sanitize";
 
 const commentSchema = z.object({
   content: z.string().min(1, "Comment cannot be empty"),
@@ -123,12 +124,15 @@ export async function POST(
       );
     }
 
+    // Sanitize comment content to prevent XSS attacks
+    const sanitizedContent = sanitizeComment(validatedData.content);
+
     // Create comment
     const comment = await prisma.comment.create({
       data: {
         feedbackId: params.id,
         userId: userId,
-        content: validatedData.content,
+        content: sanitizedContent,
         isInternal: validatedData.isInternal || false,
       },
       include: {

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { sanitizeChangelog, sanitizeInput } from "@/lib/sanitize";
 
 const updateChangelogSchema = z.object({
   title: z.string().min(1, "Title is required").optional(),
@@ -123,15 +124,25 @@ export async function PATCH(
       );
     }
 
+    // Sanitize user input to prevent XSS attacks
+    const updateData: any = {};
+    if (data.title) {
+      updateData.title = sanitizeInput(data.title);
+    }
+    if (data.content) {
+      updateData.content = sanitizeChangelog(data.content);
+    }
+    if (data.version !== undefined) {
+      updateData.version = data.version ? sanitizeInput(data.version) : null;
+    }
+    if (data.type) {
+      updateData.type = data.type;
+    }
+
     // Update changelog entry
     const updatedChangelog = await prisma.changelogEntry.update({
       where: { id: params.id },
-      data: {
-        ...(data.title && { title: data.title }),
-        ...(data.content && { content: data.content }),
-        ...(data.version !== undefined && { version: data.version }),
-        ...(data.type && { type: data.type }),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ changelog: updatedChangelog });

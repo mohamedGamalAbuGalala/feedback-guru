@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
+import { sanitizeChangelog, sanitizeInput } from "@/lib/sanitize";
 
 const changelogSchema = z.object({
   workspaceId: z.string(),
@@ -55,13 +56,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sanitize user input to prevent XSS attacks
+    const sanitizedTitle = sanitizeInput(data.title);
+    const sanitizedContent = sanitizeChangelog(data.content);
+    const sanitizedVersion = data.version ? sanitizeInput(data.version) : undefined;
+
     // Create changelog entry
     const changelog = await prisma.changelogEntry.create({
       data: {
         workspaceId: data.workspaceId,
-        title: data.title,
-        content: data.content,
-        version: data.version,
+        title: sanitizedTitle,
+        content: sanitizedContent,
+        version: sanitizedVersion,
         type: data.type,
         isPublished: false, // Draft by default
       },

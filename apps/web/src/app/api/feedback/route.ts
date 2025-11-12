@@ -4,6 +4,7 @@ import { z } from "zod";
 import { notificationService } from "@/lib/notifications";
 import { storageService } from "@/lib/storage";
 import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
+import { sanitizeFeedback, sanitizeInput, sanitizeEmail, sanitizeUrl } from "@/lib/sanitize";
 
 const feedbackSchema = z.object({
   apiKey: z.string(),
@@ -71,8 +72,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create title from description
-    const title = generateTitle(data.description);
+    // Sanitize user input to prevent XSS attacks
+    const sanitizedDescription = sanitizeFeedback(data.description);
+    const sanitizedName = data.name ? sanitizeInput(data.name) : null;
+    const sanitizedEmail = data.email ? sanitizeEmail(data.email) : null;
+    const sanitizedUrl = sanitizeUrl(data.url);
+
+    // Validate sanitized email and URL
+    if (data.email && !sanitizedEmail) {
+      return NextResponse.json(
+        { error: "Invalid email address" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedUrl) {
+      return NextResponse.json(
+        { error: "Invalid URL" },
+        { status: 400 }
+      );
+    }
+
+    // Create title from sanitized description
+    const title = generateTitle(sanitizedDescription);
 
     // Upload screenshots to S3/R2 if configured
     let screenshotUrls: string[] = [];
@@ -91,10 +113,10 @@ export async function POST(request: NextRequest) {
         category: data.category,
         priority: data.priority,
         title: title,
-        description: data.description,
-        email: data.email || null,
-        name: data.name || null,
-        url: data.url,
+        description: sanitizedDescription,
+        email: sanitizedEmail,
+        name: sanitizedName,
+        url: sanitizedUrl,
         browser: data.browser,
         browserVersion: data.browserVersion,
         os: data.os,
