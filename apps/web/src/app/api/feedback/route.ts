@@ -299,9 +299,16 @@ export async function POST(request: NextRequest) {
 // - apiKey: string (required) - Project API key
 // - page: number (optional, default: 1) - Page number
 // - limit: number (optional, default: 20, max: 100) - Items per page
-// - status: string (optional) - Filter by status
-// - category: string (optional) - Filter by category
-// - priority: string (optional) - Filter by priority
+// - status: string (optional) - Filter by status (single value for backward compatibility)
+// - statuses: string (optional) - Filter by multiple statuses (comma-separated)
+// - category: string (optional) - Filter by category (single value for backward compatibility)
+// - categories: string (optional) - Filter by multiple categories (comma-separated)
+// - priority: string (optional) - Filter by priority (single value for backward compatibility)
+// - priorities: string (optional) - Filter by multiple priorities (comma-separated)
+// - hasScreenshots: boolean (optional) - Filter by screenshots presence
+// - isPublic: boolean (optional) - Filter by public/private status
+// - dateFrom: string (optional) - Filter by creation date from (ISO string)
+// - dateTo: string (optional) - Filter by creation date to (ISO string)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -333,19 +340,69 @@ export async function GET(request: NextRequest) {
       projectId: project.id,
     };
 
-    const status = searchParams.get("status");
-    if (status) {
-      where.status = status;
+    // Advanced filtering: Multiple categories (OR logic)
+    const categoriesParam = searchParams.get("categories");
+    const categoryParam = searchParams.get("category"); // Backward compatibility
+    if (categoriesParam) {
+      const categories = categoriesParam.split(",").filter(Boolean);
+      if (categories.length > 0) {
+        where.category = { in: categories };
+      }
+    } else if (categoryParam) {
+      where.category = categoryParam;
     }
 
-    const category = searchParams.get("category");
-    if (category) {
-      where.category = category;
+    // Advanced filtering: Multiple statuses (OR logic)
+    const statusesParam = searchParams.get("statuses");
+    const statusParam = searchParams.get("status"); // Backward compatibility
+    if (statusesParam) {
+      const statuses = statusesParam.split(",").filter(Boolean);
+      if (statuses.length > 0) {
+        where.status = { in: statuses };
+      }
+    } else if (statusParam) {
+      where.status = statusParam;
     }
 
-    const priority = searchParams.get("priority");
-    if (priority) {
-      where.priority = priority;
+    // Advanced filtering: Multiple priorities (OR logic)
+    const prioritiesParam = searchParams.get("priorities");
+    const priorityParam = searchParams.get("priority"); // Backward compatibility
+    if (prioritiesParam) {
+      const priorities = prioritiesParam.split(",").filter(Boolean);
+      if (priorities.length > 0) {
+        where.priority = { in: priorities };
+      }
+    } else if (priorityParam) {
+      where.priority = priorityParam;
+    }
+
+    // Filter by screenshots presence
+    const hasScreenshots = searchParams.get("hasScreenshots");
+    if (hasScreenshots === "true") {
+      where.screenshots = {
+        some: {},
+      };
+    }
+
+    // Filter by public/private
+    const isPublic = searchParams.get("isPublic");
+    if (isPublic === "true") {
+      where.isPublic = true;
+    } else if (isPublic === "false") {
+      where.isPublic = false;
+    }
+
+    // Filter by date range
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) {
+        where.createdAt.gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        where.createdAt.lte = new Date(dateTo);
+      }
     }
 
     // Get total count for pagination
