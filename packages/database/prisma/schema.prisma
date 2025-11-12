@@ -14,20 +14,23 @@ datasource db {
 // ============================================================================
 
 model User {
-  id            String            @id @default(cuid())
-  email         String            @unique
-  name          String?
-  password      String
-  emailVerified DateTime?
-  image         String?
-  workspaces    WorkspaceMember[]
-  accounts      Account[]
-  sessions      Session[]
-  comments      Comment[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id               String            @id @default(cuid())
+  email            String            @unique
+  name             String?
+  password         String
+  emailVerified    DateTime?
+  image            String?
+  resetToken       String?           @unique
+  resetTokenExpiry DateTime?
+  workspaces       WorkspaceMember[]
+  accounts         Account[]
+  sessions         Session[]
+  comments         Comment[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([email])
+  @@index([resetToken])
 }
 
 model Account {
