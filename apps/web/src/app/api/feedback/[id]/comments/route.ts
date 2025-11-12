@@ -5,11 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notificationService } from "@/lib/notifications";
 import { sanitizeComment } from "@/lib/sanitize";
-
-const commentSchema = z.object({
-  content: z.string().min(1, "Comment cannot be empty"),
-  isInternal: z.boolean().optional(),
-});
+import { commentSchema } from "@/lib/validation-schemas";
 
 // GET /api/feedback/[id]/comments - Get all comments for a feedback item
 export async function GET(

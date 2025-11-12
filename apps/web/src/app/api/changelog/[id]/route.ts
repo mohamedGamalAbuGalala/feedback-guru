@@ -4,13 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { sanitizeChangelog, sanitizeInput } from "@/lib/sanitize";
-
-const updateChangelogSchema = z.object({
-  title: z.string().min(1, "Title is required").optional(),
-  content: z.string().min(1, "Content is required").optional(),
-  version: z.string().optional().nullable(),
-  type: z.enum(["FEATURE", "IMPROVEMENT", "BUG_FIX", "BREAKING_CHANGE"]).optional(),
-});
+import { updateChangelogSchema } from "@/lib/validation-schemas";
 
 /**
  * GET /api/changelog/[id]

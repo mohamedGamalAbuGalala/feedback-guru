@@ -5,14 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
 import { sanitizeChangelog, sanitizeInput } from "@/lib/sanitize";
-
-const changelogSchema = z.object({
-  workspaceId: z.string(),
-  title: z.string().min(1, "Title is required"),
-  content: z.string().min(1, "Content is required"),
-  version: z.string().optional(),
-  type: z.enum(["FEATURE", "IMPROVEMENT", "BUG_FIX", "BREAKING_CHANGE"]).default("FEATURE"),
-});
+import { changelogSchema } from "@/lib/validation-schemas";
 
 /**
  * POST /api/changelog
