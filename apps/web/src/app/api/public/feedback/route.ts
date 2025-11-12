@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pagination";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
 /**
  * GET /api/public/feedback
@@ -13,8 +14,10 @@ import { getPaginationFromSearchParams, createPaginatedResponse } from "@/lib/pa
  * - sortBy: "votes" | "recent" (default: "votes")
  * - page: number (default: 1)
  * - limit: number (default: 20, max: 100)
+ *
+ * Rate limited: 20 requests per minute
  */
-export async function GET(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
     // Get query params
     const { searchParams } = new URL(request.url);
@@ -128,3 +131,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// Apply rate limiting (20 requests per minute for public endpoints)
+export const GET = withRateLimit(handler, 'public');
